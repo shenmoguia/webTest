@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function find_all(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sort_column(elem) {
+    toggle_sort_states(elem);
+    var colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    var key;
+    if (elem.classList.contains('numeric')) {
+        key = key_num;
+    } else if (elem.classList.contains('result')) {
+        key = key_result;
+    } else {
+        key = key_alpha;
+    }
+    sort_table(elem, key(colIndex));
+}
+
+function show_all_extras() {
+    find_all('.col-result').forEach(show_extras);
+}
+
+function hide_all_extras() {
+    find_all('.col-result').forEach(hide_extras);
+}
+
+function show_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.remove("collapsed");
+    expandcollapse.classList.remove("expander");
+    expandcollapse.classList.add("collapser");
+}
+
+function hide_extras(colresult_elem) {
+    var extras = colresult_elem.parentNode.nextElementSibling;
+    var expandcollapse = colresult_elem.firstElementChild;
+    extras.classList.add("collapsed");
+    expandcollapse.classList.remove("collapser");
+    expandcollapse.classList.add("expander");
+}
+
+function show_filters() {
+    var filter_items = document.getElementsByClassName('filter');
+    for (var i = 0; i < filter_items.length; i++)
+        filter_items[i].hidden = false;
+}
+
+function add_collapse() {
+    // Add links for show/hide all
+    var resulttable = find('table#results-table');
+    var showhideall = document.createElement("p");
+    showhideall.innerHTML = '<a href="javascript:show_all_extras()">Show all details</a> / ' +
+                            '<a href="javascript:hide_all_extras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    find_all('.col-result').forEach(function(elem) {
+        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var extras = elem.parentNode.nextElementSibling;
+        var expandcollapse = document.createElement("span");
+        if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add("collapsed");
+            expandcollapse.classList.add("expander");
+        } else {
+            expandcollapse.classList.add("collapser");
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener("click", function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains("collapsed")) {
+                show_extras(event.currentTarget);
+            } else {
+                hide_extras(event.currentTarget);
+            }
+        });
+    })
+}
+
+function get_query_parameter(name) {
+    var match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () {
+    reset_sort_headers();
+
+    add_collapse();
+
+    show_filters();
+
+    toggle_sort_states(find('.initial-sort'));
+
+    find_all('.sortable').forEach(function(elem) {
+        elem.addEventListener("click",
+                              function(event) {
+                                  sort_column(elem);
+                              }, false)
+    });
+
+};
+
+function sort_table(clicked, key_func) {
+    var rows = find_all('.results-table-row');
+    var reversed = !clicked.classList.contains('asc');
+    var sorted_rows = sort(rows, key_func, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    var thead = document.getElementById("results-table-head");
+    document.getElementById('results-table').remove();
+    var parent = document.createElement("table");
+    parent.id = "results-table";
+    parent.appendChild(thead);
+    sorted_rows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName("BODY")[0].appendChild(parent);
+}
+
+function sort(items, key_func, reversed) {
+    var sort_array = items.map(function(item, i) {
+        return [key_func(item), i];
+    });
+    var multiplier = reversed ? -1 : 1;
+
+    sort_array.sort(function(a, b) {
+        var key_a = a[0];
+        var key_b = b[0];
+        return multiplier * (key_a >= key_b ? 1 : -1);
+    });
+
+    return sort_array.map(function(item) {
+        var index = item[1];
+        return items[index];
+    });
+}
+
+function key_alpha(col_index) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[col_index].firstChild.data.toLowerCase();
+    };
+}
+
+function key_num(col_index) {
+    return function(elem) {
+        return parseFloat(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function key_result(col_index) {
+    return function(elem) {
+        var strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+                       'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[col_index].firstChild.data);
+    };
+}
+
+function reset_sort_headers() {
+    find_all('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    find_all('.sortable').forEach(function(elem) {
+        var icon = document.createElement("div");
+        icon.className = "sort-icon";
+        icon.textContent = "vvv";
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove("desc", "active");
+        elem.classList.add("asc", "inactive");
+    });
+}
+
+function toggle_sort_states(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        reset_sort_headers();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function is_all_rows_hidden(value) {
+  return value.hidden == false;
+}
+
+function filter_table(elem) {
+    var outcome_att = "data-test-result";
+    var outcome = elem.getAttribute(outcome_att);
+    class_outcome = outcome + " results-table-row";
+    var outcome_rows = document.getElementsByClassName(class_outcome);
+
+    for(var i = 0; i < outcome_rows.length; i++){
+        outcome_rows[i].hidden = !elem.checked;
+    }
+
+    var rows = find_all('.results-table-row').filter(is_all_rows_hidden);
+    var all_rows_hidden = rows.length == 0 ? true : false;
+    var not_found_message = document.getElementById("not-found-message");
+    not_found_message.hidden = !all_rows_hidden;
+}
+</script>
+    <h1>web.html</h1>
+    <p>Report generated on 16-Jun-2020 at 13:43:28 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v1.20.0</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>JAVA_HOME</td>
+        <td>C:\Program Files\Java\jdk1.8.0_191</td></tr>
+      <tr>
+        <td>Packages</td>
+        <td>{&apos;pytest&apos;: &apos;5.4.3&apos;, &apos;py&apos;: &apos;1.8.0&apos;, &apos;pluggy&apos;: &apos;0.13.1&apos;}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-7-6.1.7601-SP1</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{&apos;allure-pytest&apos;: &apos;2.6.3&apos;, &apos;forked&apos;: &apos;1.1.3&apos;, &apos;html&apos;: &apos;1.20.0&apos;, &apos;metadata&apos;: &apos;1.9.0&apos;, &apos;rerunfailures&apos;: &apos;7.0&apos;, &apos;xdist&apos;: &apos;1.31.0&apos;}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.6.7</td></tr></table>
+    <h2>Summary</h2>
+    <p>12 tests ran in 156.64 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="passed">11 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="failed">1 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>, <input checked="true" class="filter" data-test-result="rerun" disabled="true" hidden="true" name="filter_checkbox" onChange="filter_table(this)" type="checkbox"/><span class="rerun">0 rerun</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable numeric" col="duration">Duration</th>
+          <th>Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">Cases/test_bid.py::test_03_success[data0]</td>
+          <td class="col-duration">30.71</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">data = {&#x27;Caseid&#x27;: 6, &#x27;amount&#x27;: &#x27;100&#x27;, &#x27;bid_name&#x27;: &#x27;第一个项目&#x27;, &#x27;expect&#x27;: &#x27;投标成功！&#x27;, ...}<br/>init_bid = (&lt;Pages.bid.BidPage object at 0x0000000002FE0BE0&gt;, &lt;Pages.personal.PersonalPage object at 0x0000000003D96588&gt;)<br/><br/>    @pytest.mark.success<br/>    @pytest.mark.parametrize(&#x27;data&#x27;,bid_data.success_data)<br/>    def test_03_success(data,init_bid):<br/>        logger.info(&#x27;正在执行{}模块第{}条测试用例,用例名字是:{},项目名字是：{},投资金额是:{},期望结果:{}&#x27;.format(data[&#x27;module&#x27;],<br/>        data[&#x27;Caseid&#x27;], data[&#x27;title&#x27;], data[&#x27;bid_name&#x27;], data[&#x27;amount&#x27;], data[&#x27;expect&#x27;]))<br/>        bid = init_bid[0]<br/>        personal = init_bid[1]<br/>        # 获取投资前的金额<br/>        begin_money = int(bid.get_begin_money() * 100)<br/>        # print(begin_money)<br/>        # 投资<br/>        bid.input_money(data[&#x27;amount&#x27;])<br/>        # 点击投资按钮<br/>        bid.get_button()<br/>        # 获取提示<br/>&gt;       prompt = bid.get_prompt()<br/><br/>Cases\test_bid.py:74: <br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/>Pages\bid.py:29: in get_prompt<br/>    ele=self.wait_ele(bid_locator.bid_prompt,30)<br/>Pages\basepage.py:25: in wait_ele<br/>    raise e<br/>Pages\basepage.py:20: in wait_ele<br/>    ele = Wait.until(ec.presence_of_element_located((locator)))<br/>_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _<br/><br/>self = &lt;selenium.webdriver.support.wait.WebDriverWait (session=&quot;f4044812671e14b69678e289cb46350a&quot;)&gt;<br/>method = &lt;selenium.webdriver.support.expected_conditions.presence_of_element_located object at 0x0000000002FBFC18&gt;<br/>message = &#x27;&#x27;<br/><br/>    def until(self, method, message=&#x27;&#x27;):<br/>        &quot;&quot;&quot;Calls the method provided with the driver as an argument until the \<br/>        return value is not False.&quot;&quot;&quot;<br/>        screen = None<br/>        stacktrace = None<br/>    <br/>        end_time = time.time() + self._timeout<br/>        while True:<br/>            try:<br/>                value = method(self._driver)<br/>                if value:<br/>                    return value<br/>            except self._ignored_exceptions as exc:<br/>                screen = getattr(exc, &#x27;screen&#x27;, None)<br/>                stacktrace = getattr(exc, &#x27;stacktrace&#x27;, None)<br/>            time.sleep(self._poll)<br/>            if time.time() &gt; end_time:<br/>                break<br/>&gt;       raise TimeoutException(message, screen, stacktrace)<br/><span class="error">E       selenium.common.exceptions.TimeoutException: Message:</span><br/><br/>C:\Python\lib\site-packages\selenium\webdriver\support\wait.py:80: TimeoutException<br/>------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行投标模块第6条测试用例,用例名字是:正常投资,项目名字是：第一个项目,投资金额是:100,期望结果:投标成功！
+ERROR    web_test:Log.py:47 出错啦错误是Message:</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_bid.py::test_01_error[data0]</td>
+          <td class="col-duration">0.64</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行投标模块第1条测试用例,用例名字是:投资金额为零,项目名字是：第一个项目,投资金额是:0,期望结果:请正确填写投标金额
+INFO     web_test:Log.py:43 投标模块第1条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_bid.py::test_01_error[data1]</td>
+          <td class="col-duration">0.57</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行投标模块第2条测试用例,用例名字是:投资金额为负,项目名字是：第一个项目,投资金额是:-100,期望结果:请正确填写投标金额
+INFO     web_test:Log.py:43 投标模块第2条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_bid.py::test_01_error[data2]</td>
+          <td class="col-duration">0.60</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行投标模块第3条测试用例,用例名字是:投资金额不是整百整数,项目名字是：第一个项目,投资金额是:10,期望结果:投标金额必须为100的倍数
+INFO     web_test:Log.py:43 投标模块第3条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_bid.py::test_01_error[data3]</td>
+          <td class="col-duration">0.68</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行投标模块第4条测试用例,用例名字是:投资金额大于余额,项目名字是：第一个项目,投资金额是:10000000000,期望结果:投标金额大于可用金额
+INFO     web_test:Log.py:43 投标模块第4条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_bid.py::test_02_whole_ten[data0]</td>
+          <td class="col-duration">0.13</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行投标模块第5条测试用例,用例名字是:投资金额不是整十数,项目名字是：第一个项目,投资金额是:99,期望结果:请输入10的整数倍
+INFO     web_test:Log.py:43 投标模块第5条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_login.py::test_01_login_error[data0]</td>
+          <td class="col-duration">10.63</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行登录模块第1条测试用例,用例名字是:不输入用户名,登录名是:,登录密码是:123654,期望值是:请输入手机号
+INFO     web_test:Log.py:43 登录模块第1条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_login.py::test_01_login_error[data1]</td>
+          <td class="col-duration">6.78</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行登录模块第2条测试用例,用例名字是:不输入密码,登录名是:18684720553,登录密码是:,期望值是:请输入密码
+INFO     web_test:Log.py:43 登录模块第2条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_login.py::test_01_login_error[data2]</td>
+          <td class="col-duration">5.79</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行登录模块第3条测试用例,用例名字是:输入不符规则的用户名,登录名是:123654,登录密码是:222,期望值是:请输入正确的手机号
+INFO     web_test:Log.py:43 登录模块第3条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_login.py::test_02_login_alter_error[data0]</td>
+          <td class="col-duration">6.02</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行登录模块第4条测试用例,用例名字是:错误密码登录,登录名是:18684720553,登录密码是:12,期望值是:帐号或密码错误!
+INFO     web_test:Log.py:43 登录模块第4条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_login.py::test_02_login_alter_error[data1]</td>
+          <td class="col-duration">5.98</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行登录模块第5条测试用例,用例名字是:未注册账号登录,登录名是:13541781424,登录密码是:123456,期望值是:此账号没有经过授权，请联系管理员!
+INFO     web_test:Log.py:43 登录模块第5条测试用例,测试结果是pass</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">Cases/test_login.py::test_03_login_success[data0]</td>
+          <td class="col-duration">28.57</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">------------------------------ Captured log call -------------------------------<br/>INFO     web_test:Log.py:43 正在执行登录模块第6条测试用例,用例名字是:正常登录,登录名是:18684720553,登录密码是:python,期望值是:我的帐户[python]
+INFO     web_test:Log.py:43 登录模块第6条测试用例,测试结果是pass</div></td></tr></tbody></table></body></html>
