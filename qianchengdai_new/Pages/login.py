@@ -7,10 +7,10 @@ from Data.locator import login_locator
 class LoginPage(BasePage):
     '''登录页面'''
 
-    def register(self,username,password):
+    def register(self,url,username,password):
         '''定位登录界面元素'''
         # 进入登录界面
-        self.driver.get('http://120.78.128.25:8765/Index/login.html')
+        self.driver.get(url)
         # 清空用户名和密码
         self.clear_user_name()
         self.clear_pass_word()
@@ -22,7 +22,7 @@ class LoginPage(BasePage):
         self.get_button().click()
 
     def get_url(self):
-        self.driver.get('http://120.78.128.25:8765/Index/login.html')
+        self.driver.get(url)
 
     def get_user_name(self):
         '''定位用户名'''
